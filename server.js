@@ -63,6 +63,9 @@ const CONFIG = {
   CLIENT_SITE_URL:    process.env.CLIENT_SITE_URL    || 'https://convertix-server-production.up.railway.app',
   CLIENT_WPP_NUMBER:  process.env.CLIENT_WPP_NUMBER  || '543518769844',
   CLIENT_WPP_MSG:     process.env.CLIENT_WPP_MSG     || 'Hola Axel, necesito tu ayuda...',
+  // Nombre del producto que se le informa a Meta en cada Purchase.
+  CLIENT_PRODUCT:     process.env.CLIENT_PRODUCT     || 'Consulta',
+  CLIENT_PRODUCT_ID:  process.env.CLIENT_PRODUCT_ID  || 'consulta',
 };
 
 // ── Postgres ───────────────────────────────────────────────────────────────
@@ -688,9 +691,9 @@ async function dispararMetaCAPI({ phone, name, nombre_emisor, monto, moneda }) {
       custom_data: {
         currency: moneda || 'ARS',
         value: monto,
-        content_name: 'Lectura de Tarot',
+        content_name: CONFIG.CLIENT_PRODUCT,
         content_type: 'product',
-        content_ids: ['tarot-lectura'],
+        content_ids: [CONFIG.CLIENT_PRODUCT_ID],
       },
     }],
   };
