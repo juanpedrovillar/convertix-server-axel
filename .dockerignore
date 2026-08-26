@@ -1,6 +1,6 @@
 node_modules
-.git
-.env
-*.log
-.DS_Store
+npm-debug.log
+events_log.json
 push-axel.sh
+.git
+*.sh

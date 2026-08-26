@@ -32,21 +32,21 @@ if (existsSync('.env')) {
   }
 }
 
-function landingPorInstancia() {
+function landingPorInstancia(porDefecto = 'landing.html') {
   const inst = process.env.EVOLUTION_INSTANCE || '';
   const propia = `${inst}_landing.html`;
   try {
     if (inst && existsSync(path.join(path.dirname(fileURLToPath(import.meta.url)), propia))) return propia;
   } catch {}
-  return 'landing.html';
+  return porDefecto;
 }
 
 const CONFIG = {
   EVOLUTION_URL:      process.env.EVOLUTION_URL      || 'https://evolution-api-production-c34d.up.railway.app',
   EVOLUTION_APIKEY:   process.env.EVOLUTION_APIKEY   || 'convertix123',
-  EVOLUTION_INSTANCE: process.env.EVOLUTION_INSTANCE || 'cande',
+  EVOLUTION_INSTANCE: process.env.EVOLUTION_INSTANCE || 'axel',
   ANTHROPIC_KEY:      process.env.ANTHROPIC_API_KEY,
-  META_PIXEL_ID:      process.env.META_PIXEL_ID      || '2029532667836385',
+  META_PIXEL_ID:      process.env.META_PIXEL_ID      || '1773629100730813',
   META_CAPI_TOKEN:    process.env.META_CAPI_TOKEN,
   META_TEST_CODE:     process.env.META_TEST_CODE      || '',
   DATABASE_URL:       process.env.DATABASE_URL,
@@ -55,10 +55,14 @@ const CONFIG = {
   // Nada de nombres de clientes hardcodeados: cada Railway define quién es.
   // Si no está seteada, busca "<instancia>_landing.html" y si no existe usa la genérica.
   // Sigue sin haber nombres de clientes en el código.
-  CLIENT_LANDING:     process.env.CLIENT_LANDING     || landingPorInstancia(),
+  CLIENT_LANDING:     process.env.CLIENT_LANDING     || landingPorInstancia('axel_landing.html'),
   // KEYWORD_LANDING es el nombre que ya existía en Railway; se respeta por compatibilidad.
-  CLIENT_KEYWORD:     process.env.CLIENT_KEYWORD || process.env.KEYWORD_LANDING || '10% de descuento',
-  CLIENT_NAME:        process.env.CLIENT_NAME        || 'Cliente',
+  CLIENT_KEYWORD:     process.env.CLIENT_KEYWORD || process.env.KEYWORD_LANDING || 'necesito tu ayuda',
+  CLIENT_NAME:        process.env.CLIENT_NAME        || 'Axel',
+  // Datos del cliente que antes estaban escritos a mano en medio del código.
+  CLIENT_SITE_URL:    process.env.CLIENT_SITE_URL    || 'https://convertix-server-production.up.railway.app',
+  CLIENT_WPP_NUMBER:  process.env.CLIENT_WPP_NUMBER  || '543518769844',
+  CLIENT_WPP_MSG:     process.env.CLIENT_WPP_MSG     || 'Hola Axel, necesito tu ayuda...',
 };
 
 // ── Postgres ───────────────────────────────────────────────────────────────
@@ -111,9 +115,9 @@ async function cargarEventosIniciales() {
     events = allRows.map(r => ({ id: r.id, ts: r.ts, tipo: r.tipo, msg: r.msg, ...r.data }));
     // Repoblar landingPhones desde tabla dedicada
     const { rows: phones } = await pool.query('SELECT phone FROM landing_phones');
-    phones.forEach(r => landingPhones.add(r.phone));
+    phones.forEach(r => landingPhones.add(r.phone.split('@')[0]));
     // También desde MENSAJE events como fallback
-    mensajes.forEach(r => { if (r.data?.phone) landingPhones.add(r.data.phone); });
+    mensajes.forEach(r => { if (r.data?.phone) landingPhones.add(r.data.phone.split('@')[0]); });
     console.log(`[DB] Cargados ${events.length} eventos (${transfers.length} transferencias, ${mensajes.length} mensajes), ${landingPhones.size} landing phones`);
   } catch (e) {
     console.error('Error cargando eventos:', e.message);
@@ -208,6 +212,11 @@ app.get('/api/wa-status', (req, res) => {
   res.json(waStatus);
 });
 
+// Endpoint de diagnóstico: muestra los phones registrados en landingPhones
+app.get('/api/debug-phones', (req, res) => {
+  res.json({ count: landingPhones.size, phones: [...landingPhones] });
+});
+
 app.get('/api/events', async (req, res) => {
   const limit = parseInt(req.query.limit) || 100;
   if (pool) {
@@ -289,8 +298,8 @@ app.get('/api/wpp-redirect', (req, res) => {
   });
   dispararMetaCAPILanding('Lead', ref, { ip, ua, fbc, fbp: fbp || null });
 
-  const wppNumber = number || '5493518513278';
-  const wppMsg    = msg || 'Hola Naomi! Quiero mi lectura con el 10% de descuento 🔮';
+  const wppNumber = number || CONFIG.CLIENT_WPP_NUMBER;
+  const wppMsg    = msg || CONFIG.CLIENT_WPP_MSG;
   res.redirect(302, `https://wa.me/${wppNumber}?text=${encodeURIComponent(wppMsg)}`);
 });
 
@@ -411,7 +420,7 @@ app.post('/webhook', async (req, res) => {
     if (!data?.message) return;
 
     const messageType = data.messageType;
-    const phone = data.key.remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '');
+    const phone = data.key.remoteJid.split('@')[0];
     const name  = data.pushName || 'Desconocido';
 
     // Detectar chats iniciados desde la landing (mensaje pre-llenado del botón WPP)
@@ -535,11 +544,6 @@ async function analizarImagen(data) {
 
     const resultado = parsearJSON(claudeData.content[0].text);
     if (resultado && resultado.es_transferencia) {
-      const receptor = (resultado.nombre_receptor || '').toLowerCase();
-      if (!receptor.includes('candela') && !receptor.includes('ridolfi') && !receptor.includes('naomi')) {
-        logEntry('IGNORADO', `Transferencia no dirigida a Candela (receptor: ${resultado.nombre_receptor || 'desconocido'})`);
-        return null;
-      }
       resultado.imagen_base64 = `data:${mediaData.mimetype || 'image/jpeg'};base64,${imageData}`;
     }
     return resultado;
@@ -600,13 +604,6 @@ async function analizarDocumento(data) {
     }
 
     const resultado = parsearJSON(claudeData.content[0].text);
-    if (resultado && resultado.es_transferencia) {
-      const receptor = (resultado.nombre_receptor || '').toLowerCase();
-      if (!receptor.includes('candela') && !receptor.includes('ridolfi') && !receptor.includes('naomi')) {
-        logEntry('IGNORADO', `Transferencia no dirigida a Candela (receptor: ${resultado.nombre_receptor || 'desconocido'})`);
-        return null;
-      }
-    }
     return resultado;
   } catch (err) {
     logEntry('ERROR', `analizarDocumento excepción: ${err.message}`, { remoteJid: data.key?.remoteJid });
@@ -630,7 +627,7 @@ async function dispararMetaCAPILanding(eventName, ref, browserData = {}) {
       event_name: eventName,
       event_time: Math.floor(Date.now() / 1000),
       action_source: 'website',
-      event_source_url: 'https://tarotconnaomi.com/landing',
+      event_source_url: `${CONFIG.CLIENT_SITE_URL}/landing`,
       user_data,
       custom_data: { ref: ref || 'organico', page: 'landing' },
     }],
@@ -679,7 +676,7 @@ async function dispararMetaCAPI({ phone, name, nombre_emisor, monto, moneda }) {
   if (fn) user_data.fn = [sha256(fn.toLowerCase())];
   if (ln) user_data.ln = [sha256(ln.toLowerCase())];
 
-  const LANDING_URL = `https://tarotconnaomi.com/landing`;
+  const LANDING_URL = `${CONFIG.CLIENT_SITE_URL}/landing`;
 
   const payload = {
     data: [{
