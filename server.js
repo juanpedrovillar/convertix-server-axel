@@ -56,7 +56,8 @@ const CONFIG = {
   // Si no está seteada, busca "<instancia>_landing.html" y si no existe usa la genérica.
   // Sigue sin haber nombres de clientes en el código.
   CLIENT_LANDING:     process.env.CLIENT_LANDING     || landingPorInstancia(),
-  CLIENT_KEYWORD:     process.env.CLIENT_KEYWORD     || '10% de descuento',
+  // KEYWORD_LANDING es el nombre que ya existía en Railway; se respeta por compatibilidad.
+  CLIENT_KEYWORD:     process.env.CLIENT_KEYWORD || process.env.KEYWORD_LANDING || '10% de descuento',
   CLIENT_NAME:        process.env.CLIENT_NAME        || 'Cliente',
 };
 
@@ -850,8 +851,8 @@ cargarEventosIniciales().then(async () => {
   httpServer.listen(PORT, () => {
     console.log(`🚀 Convertix corriendo en http://localhost:${PORT}`);
     console.log(`👤 Cliente: ${CONFIG.EVOLUTION_INSTANCE} | landing: ${CONFIG.CLIENT_LANDING} | keyword: "${CONFIG.CLIENT_KEYWORD}"`);
-    if (!process.env.CLIENT_LANDING || !process.env.CLIENT_KEYWORD) {
-      console.warn('⚠️  Faltan CLIENT_LANDING y/o CLIENT_KEYWORD en las variables de entorno — usando los valores por defecto.');
+    if (!process.env.CLIENT_KEYWORD && !process.env.KEYWORD_LANDING) {
+      console.warn('⚠️  Falta CLIENT_KEYWORD (o KEYWORD_LANDING) — usando el valor por defecto.');
     }
     console.log(`📊 Dashboard: http://localhost:${PORT}/dashboard.html`);
     console.log(`🔗 Webhook URL para Evolution API: http://TU-NGROK-URL/webhook`);
