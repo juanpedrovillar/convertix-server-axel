@@ -1,0 +1,1747 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evolution Conversion</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+      background: #0f0f0f;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 40% 35% at 0% 0%, rgba(120, 45, 15, .4) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 35% at 100% 0%, rgba(120, 45, 15, .4) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 35% at 0% 100%, rgba(120, 45, 15, .4) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 35% at 100% 100%, rgba(120, 45, 15, .4) 0%, transparent 60%);
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 210px;
+      min-height: 100vh;
+      background: #0c0c0c;
+      border-right: 1px solid #1e1e1e;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      z-index: 10;
+    }
+
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 17px 15px;
+      border-bottom: 1px solid #1e1e1e;
+      margin-bottom: 4px;
+    }
+
+    .logo-icon {
+      width: 27px;
+      height: 27px;
+      border: 2.5px solid #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo-icon::after {
+      content: '';
+      width: 7px;
+      height: 7px;
+      background: #fff;
+      border-radius: 50%;
+    }
+
+    .logo-text {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #fff;
+      line-height: 1.2;
+    }
+
+    .sidebar-section {
+      flex: 1;
+      padding: 6px 8px;
+      overflow-y: auto;
+    }
+
+    .sidebar-bottom {
+      padding: 4px 8px;
+      border-top: 1px solid #1e1e1e;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13.5px;
+      color: #888;
+      transition: all .15s;
+      margin-bottom: 2px;
+      user-select: none;
+    }
+
+    .nav-item:hover {
+      background: #1a1a1a;
+      color: #ccc;
+    }
+
+    .nav-item.active {
+      background: #fff;
+      color: #111;
+    }
+
+    .nav-item.active svg {
+      stroke: #111;
+    }
+
+    .nav-item svg {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      flex-shrink: 0;
+    }
+
+    .ws-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #333;
+      margin-left: auto;
+      flex-shrink: 0;
+      transition: background .3s;
+    }
+
+    .ws-dot.connected {
+      background: #00c88a;
+    }
+
+    .ws-dot.error {
+      background: #e74c3c;
+    }
+
+    .account-switcher {
+      padding: 10px 12px;
+      border-top: 1px solid #1e1e1e;
+    }
+    .account-label {
+      font-size: 10px;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+    .account-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #ccc;
+      margin-bottom: 8px;
+    }
+    .account-switch-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #666;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 5px 10px;
+      cursor: pointer;
+      width: 100%;
+      transition: all .15s;
+    }
+    .account-switch-btn:hover { color: #aaa; border-color: #444; background: #222; }
+
+    .sidebar-credits {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 13px 14px;
+      font-size: 12px;
+      color: #444;
+      border-top: 1px solid #1e1e1e;
+    }
+
+    /* ── MAIN ── */
+    .main {
+      margin-left: 210px;
+      flex: 1;
+      position: relative;
+      z-index: 1;
+      overflow-y: auto;
+      max-height: 100vh;
+    }
+
+    .page {
+      display: none;
+      padding: 28px 28px 40px;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    /* ── HEADER ── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .filters {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .filter-btn {
+      padding: 6px 13px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      color: #555;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      transition: all .15s;
+    }
+
+    .filter-btn:hover {
+      color: #ccc;
+    }
+
+    .filter-btn.active {
+      background: #fff;
+      color: #111;
+      font-weight: 500;
+    }
+
+    /* ── CARDS ── */
+    .grid-top {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .grid-bot {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+    }
+
+    .card {
+      background: #141414;
+      border: 1px solid #1f1f1f;
+      border-radius: 12px;
+      padding: 18px 22px 14px;
+    }
+
+    .card-title {
+      font-size: 12.5px;
+      color: #555;
+      margin-bottom: 3px;
+    }
+
+    .card-value {
+      font-size: 38px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .card-value-sm {
+      font-size: 30px;
+    }
+
+    .card-sub {
+      font-size: 13px;
+      color: #00d4a8;
+      font-weight: 500;
+    }
+
+    .card-date {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11.5px;
+      color: #3a3a3a;
+      margin: 5px 0 10px;
+    }
+
+    .card-date svg {
+      width: 11px;
+      height: 11px;
+      stroke: #4285f4;
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .card-chart {
+      height: 90px;
+    }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: #333;
+      text-align: center;
+      gap: 12px;
+    }
+
+    .empty-state svg {
+      width: 38px;
+      height: 38px;
+      stroke: #2a2a2a;
+      fill: none;
+      stroke-width: 1.5;
+    }
+
+    .empty-state p {
+      font-size: 13.5px;
+      max-width: 320px;
+      line-height: 1.7;
+    }
+
+    /* ── CONVERSION TABLE ── */
+    .conv-card {
+      background: #141414;
+      border: 1px solid #1f1f1f;
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .conv-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #444;
+      margin-bottom: 12px;
+    }
+
+    .conv-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 12px;
+      border-radius: 7px;
+      font-size: 12.5px;
+      color: #888;
+      margin-bottom: 4px;
+      background: #1a1a1a;
+    }
+
+    .conv-row:hover {
+      background: #202020;
+    }
+
+    .conv-pct {
+      font-weight: 600;
+      color: #ddd;
+    }
+
+    /* ── TABLES ── */
+    .table-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 13px;
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 8px;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .search-box svg {
+      width: 14px;
+      height: 14px;
+      stroke: #333;
+      fill: none;
+      stroke-width: 2;
+      flex-shrink: 0;
+    }
+
+    .search-box input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #ccc;
+      font-size: 13px;
+      width: 100%;
+    }
+
+    .search-box input::placeholder {
+      color: #333;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .data-table th {
+      text-align: left;
+      font-size: 11px;
+      color: #333;
+      font-weight: 500;
+      padding: 9px 14px;
+      border-bottom: 1px solid #1c1c1c;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .data-table th:last-child {
+      text-align: right;
+    }
+
+    .data-table td {
+      padding: 12px 14px;
+      font-size: 13px;
+      border-bottom: 1px solid #181818;
+      color: #aaa;
+    }
+
+    .data-table td:last-child {
+      text-align: right;
+    }
+
+    .data-table tr:hover td {
+      background: #141414;
+    }
+
+    .avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .client-cell {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .monto-val {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .ref-code {
+      font-family: monospace;
+      font-size: 12px;
+      color: #444;
+    }
+
+    .table-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 2px 0;
+      font-size: 12.5px;
+      color: #333;
+    }
+
+    /* ── BADGES ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 500;
+    }
+
+    .badge-conv {
+      background: rgba(0, 200, 138, .08);
+      color: #00c88a;
+    }
+
+    .badge svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .contact-amount {
+      font-size: 12px;
+      color: #00c88a;
+      margin-left: 5px;
+    }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 15px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .15s;
+      border: none;
+    }
+
+    .btn-primary {
+      background: #fff;
+      color: #111;
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      opacity: .85;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: #999;
+      border: 1px solid #2a2a2a;
+    }
+
+    .btn-secondary:hover {
+      border-color: #444;
+      color: #fff;
+    }
+
+    .btn-danger {
+      background: rgba(231, 76, 60, .08);
+      color: #c0392b;
+      border: 1px solid rgba(231, 76, 60, .15);
+    }
+
+    .btn-danger:hover {
+      background: rgba(231, 76, 60, .15);
+    }
+
+    .badge-new {
+      background: #4285f4;
+      color: #fff;
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    /* ── PÁGINAS ── */
+    .pages-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+      gap: 14px;
+    }
+
+    .page-card {
+      background: #141414;
+      border: 1px solid #1f1f1f;
+      border-radius: 11px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+
+    .page-card:hover {
+      border-color: #2a2a2a;
+    }
+
+    .page-thumb {
+      height: 115px;
+      background: linear-gradient(135deg, #121228, #111820);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .thumb-mock {
+      width: 75%;
+      height: 80%;
+      background: #0d1117;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 8px;
+    }
+
+    .tb {
+      height: 3px;
+      background: #1e2a2e;
+      border-radius: 2px;
+      width: 80%;
+    }
+
+    .tb.ac {
+      background: #00c88a;
+      width: 50%;
+    }
+
+    .tb-img {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #1e2e1e;
+      margin-bottom: 3px;
+    }
+
+    .page-card-body {
+      padding: 11px 13px;
+    }
+
+    .page-card-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .page-card-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: #ccc;
+      margin-bottom: 2px;
+    }
+
+    .page-card-slug {
+      font-size: 11.5px;
+      color: #333;
+    }
+
+    .menu-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 5px;
+      border: none;
+      background: transparent;
+      color: #333;
+      cursor: pointer;
+      font-size: 17px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .menu-btn:hover {
+      background: #1e1e1e;
+      color: #666;
+    }
+
+    /* ── LÍNEAS / QR ── */
+    .lineas-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+    }
+
+    .linea-card {
+      background: #141414;
+      border: 1px solid #1f1f1f;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .linea-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .linea-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: #ddd;
+    }
+
+    .linea-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 5px;
+      background: #1a1a1a;
+      color: #444;
+      border: 1px solid #222;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot-red {
+      background: #e74c3c;
+    }
+
+    .dot-green {
+      background: #00c88a;
+    }
+
+    .dot-yellow {
+      background: #f39c12;
+      animation: blink 1.5s infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .3
+      }
+    }
+
+    .sl-red {
+      color: #c0392b;
+      font-size: 12.5px;
+    }
+
+    .sl-green {
+      color: #00c88a;
+      font-size: 12.5px;
+    }
+
+    .sl-yellow {
+      color: #f39c12;
+      font-size: 12.5px;
+    }
+
+    .linea-sub {
+      font-size: 12px;
+      color: #333;
+      margin-bottom: 14px;
+    }
+
+    .qr-container {
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px;
+      display: inline-block;
+      margin: 10px 0 14px;
+    }
+
+    .qr-container img {
+      display: block;
+      width: 180px;
+      height: 180px;
+    }
+
+    .qr-instructions {
+      font-size: 12px;
+      color: #444;
+      margin-bottom: 12px;
+      line-height: 1.7;
+    }
+
+    .linea-footer {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-act {
+      flex: 1;
+      padding: 9px;
+      background: #1a1a1a;
+      border: 1px solid #252525;
+      border-radius: 8px;
+      color: #aaa;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all .15s;
+    }
+
+    .btn-act:hover {
+      border-color: #3a3a3a;
+      color: #fff;
+    }
+
+    .btn-more {
+      width: 36px;
+      height: 36px;
+      border: 1px solid #252525;
+      border-radius: 8px;
+      background: #1a1a1a;
+      color: #444;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+    }
+
+    .btn-more:hover {
+      color: #888;
+    }
+
+    .webhook-box {
+      background: #141414;
+      border: 1px solid #1f1f1f;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+
+    .webhook-box h3 {
+      font-size: 14px;
+      color: #ccc;
+      margin-bottom: 6px;
+    }
+
+    .webhook-box p {
+      font-size: 12.5px;
+      color: #444;
+      margin-bottom: 14px;
+      line-height: 1.7;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .text-input {
+      flex: 1;
+      padding: 9px 13px;
+      background: #0f0f0f;
+      border: 1px solid #222;
+      border-radius: 8px;
+      color: #ccc;
+      font-size: 13px;
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    .text-input:focus {
+      border-color: #3a3a3a;
+    }
+
+    .text-input::placeholder {
+      color: #2a2a2a;
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 11px 16px;
+      font-size: 13px;
+      color: #aaa;
+      z-index: 999;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: all .25s;
+      pointer-events: none;
+      max-width: 280px;
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    #toast.ok {
+      border-color: #00c88a44;
+      color: #00c88a;
+    }
+
+    #toast.err {
+      border-color: #e74c3c44;
+      color: #e74c3c;
+    }
+
+    /* Modal comprobante */
+    #imgModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .85);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #imgModal.open {
+      display: flex;
+    }
+
+    #imgModal img {
+      max-width: 90vw;
+      max-height: 88vh;
+      border-radius: 10px;
+      box-shadow: 0 0 40px rgba(0, 0, 0, .8);
+    }
+
+    #imgModal button {
+      position: absolute;
+      top: 18px;
+      right: 22px;
+      background: transparent;
+      border: none;
+      color: #aaa;
+      font-size: 26px;
+      cursor: pointer;
+      line-height: 1;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"></div>
+      <span class="logo-text">Evolution<br>Conversion</span>
+    </div>
+    <div class="sidebar-section">
+      <div class="nav-item active" onclick="nav('analytics',this)">
+        <svg viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+        Analytics
+        <div class="ws-dot" id="wsDot"></div>
+      </div>
+      <div class="nav-item" onclick="nav('ventas',this)">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <path d="M16 10a4 4 0 01-8 0" />
+        </svg>
+        Ventas
+      </div>
+      <div class="nav-item" onclick="nav('contactos',this)">
+        <svg viewBox="0 0 24 24">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 00-3-3.87" />
+          <path d="M16 3.13a4 4 0 010 7.75" />
+        </svg>
+        Contactos
+      </div>
+      <div class="nav-item" onclick="nav('paginas',this)">
+        <svg viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+        </svg>
+        Páginas
+      </div>
+      <div class="nav-item" onclick="nav('lineas',this)">
+        <svg viewBox="0 0 24 24">
+          <path
+            d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" />
+        </svg>
+        Líneas
+      </div>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="nav-item" style="margin-bottom:0; color:#444;">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.07 4.93A10 10 0 115.07 19.07" />
+        </svg>
+        Configuración
+      </div>
+    </div>
+    <div class="account-switcher">
+      <div class="account-label">Cuenta activa</div>
+      <div class="account-name" id="accountName">—</div>
+      <button class="account-switch-btn" id="accountSwitchBtn" onclick="switchAccount()" style="display:none">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3L4 7l4 4M16 21l4-4-4-4M4 7h16M4 17h16"/></svg>
+        <span id="accountSwitchLabel">Cambiar cuenta</span>
+      </button>
+    </div>
+    <div class="sidebar-credits">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span id="waDot" style="width:8px;height:8px;border-radius:50%;background:#888;flex-shrink:0;"></span>
+        <span id="waTxt" style="font-size:11px;color:#aaa;">WA verificando...</span>
+      </div>
+      <span id="statusTxt">Conectando...</span>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ── ANALYTICS ── -->
+    <div id="page-analytics" class="page active">
+      <div class="page-header">
+        <h1 class="page-title">Analytics</h1>
+        <div class="filters">
+          <button class="filter-btn" onclick="setRange('hoy',this)">Hoy</button>
+          <button class="filter-btn" onclick="setRange('15d',this)">15d</button>
+          <button class="filter-btn active" onclick="setRange('30d',this)">30d</button>
+          <button class="filter-btn" onclick="setRange('90d',this)">90d</button>
+        </div>
+      </div>
+      <div id="analytics-empty" class="empty-state" style="display:none;">
+        <svg viewBox="0 0 24 24">
+          <line x1="18" y1="20" x2="18" y2="10" />
+          <line x1="12" y1="20" x2="12" y2="4" />
+          <line x1="6" y1="20" x2="6" y2="14" />
+        </svg>
+        <p>Los datos aparecerán aquí cuando llegue la primera transferencia.<br>Conectá tu WhatsApp en <strong
+            style="color:#555;">Líneas</strong> para empezar.</p>
+      </div>
+      <div id="analytics-content" style="display:none;">
+        <div class="grid-top">
+          <div class="card">
+            <div class="card-title">Ventas</div>
+            <div style="display:flex;align-items:baseline;gap:10px;">
+              <div class="card-value" id="kpiVentas">0</div>
+              <div class="card-sub" id="kpiMonto"></div>
+            </div>
+            <div class="card-date">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4l3 3" />
+              </svg>
+              <span id="dateRange">—</span>
+            </div>
+            <div class="card-chart"><canvas id="chartVentas"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Chats de WPP</div>
+            <div class="card-value card-value-sm" id="kpiChats">0</div>
+            <div class="card-date">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4l3 3" />
+              </svg>
+              <span class="dynDate">—</span>
+            </div>
+            <div class="card-chart"><canvas id="chartChats"></canvas></div>
+          </div>
+        </div>
+        <div class="grid-bot">
+          <div class="card">
+            <div class="card-title">Clicks al botón WPP</div>
+            <div class="card-value card-value-sm" id="kpiClicks">0</div>
+            <div class="card-date">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4l3 3" />
+              </svg>
+              <span class="dynDate">—</span>
+            </div>
+            <div class="card-chart"><canvas id="chartClicks"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Visitas de página</div>
+            <div class="card-value card-value-sm" id="kpiVisitas">0</div>
+            <div class="card-date">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4l3 3" />
+              </svg>
+              <span class="dynDate">—</span>
+            </div>
+            <div class="card-chart"><canvas id="chartVisitas"></canvas></div>
+          </div>
+          <div class="conv-card">
+            <div class="conv-header"><span>Funnel (% de visitas)</span><span>%</span></div>
+            <div class="conv-row"><span>Visitas → Clicks</span><span class="conv-pct" id="convVC">—</span></div>
+            <div class="conv-row"><span>Visitas → Chats</span><span class="conv-pct" id="convCH">—</span></div>
+            <div class="conv-row"><span>Visitas → Conversiones</span><span class="conv-pct" id="convVS">—</span></div>
+            <div class="conv-row"><span>Chats → Conversiones</span><span class="conv-pct" id="convHS">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VENTAS ── -->
+    <div id="page-ventas" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Ventas</h1>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="filters">
+            <button class="filter-btn" onclick="setRange('hoy',this)">Hoy</button>
+            <button class="filter-btn" onclick="setRange('15d',this)">15d</button>
+            <button class="filter-btn active" onclick="setRange('30d',this)">30d</button>
+            <button class="filter-btn" onclick="setRange('90d',this)">90d</button>
+          </div>
+          <button class="btn btn-danger" onclick="clearEvents()">
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14H6L5 6" />
+              <path d="M10 11v6M14 11v6" />
+              <path d="M9 6V4h6v2" />
+            </svg>
+            Limpiar
+          </button>
+        </div>
+      </div>
+      <div class="table-controls">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input type="text" id="searchVentas" placeholder="Buscar por nombre o teléfono..." oninput="renderVentas()">
+        </div>
+      </div>
+      <div id="ventas-empty" class="empty-state">
+        <svg viewBox="0 0 24 24">
+          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <path d="M16 10a4 4 0 01-8 0" />
+        </svg>
+        <p>Las ventas aparecerán aquí cuando un cliente envíe un comprobante de transferencia por WhatsApp y la IA lo
+          detecte.</p>
+      </div>
+      <table class="data-table" id="ventasTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Teléfono</th>
+            <th>Fecha</th>
+            <th>Monto</th>
+            <th>Comprobante</th>
+          </tr>
+        </thead>
+        <tbody id="ventas-body"></tbody>
+      </table>
+      <div class="table-footer">
+        <span id="ventas-count" style="color:#333;">Total: 0</span>
+        <span id="ventas-total" style="color:#00c88a;font-weight:600;"></span>
+      </div>
+    </div>
+
+    <!-- ── CONTACTOS ── -->
+    <div id="page-contactos" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Contactos</h1>
+        <button class="btn btn-secondary" onclick="exportContactos()">
+          <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Exportar CSV
+        </button>
+      </div>
+      <div class="table-controls">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input type="text" id="searchContactos" placeholder="Buscar por nombre o teléfono..."
+            oninput="renderContactos()">
+        </div>
+      </div>
+      <div id="contactos-empty" class="empty-state">
+        <svg viewBox="0 0 24 24">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+        </svg>
+        <p>Los contactos aparecerán aquí cuando lleguen comprobantes de transferencia por WhatsApp.</p>
+      </div>
+      <table class="data-table" id="contactosTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Contacto</th>
+            <th>Teléfono</th>
+            <th>Última venta</th>
+            <th>Compras</th>
+            <th>Total</th>
+            <th>Etapa</th>
+          </tr>
+        </thead>
+        <tbody id="contactos-body"></tbody>
+      </table>
+      <div class="table-footer">
+        <span id="contactos-count" style="color:#333;">Total: 0</span>
+      </div>
+    </div>
+
+    <!-- ── PÁGINAS ── -->
+    <div id="page-paginas" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Páginas</h1>
+        <button class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2">
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
+          Crear con HTML
+          <span class="badge-new">Nuevo</span>
+        </button>
+      </div>
+      <div class="pages-grid">
+        <div class="page-card" onclick="window.open('/landing','_blank')">
+          <div class="page-thumb">
+            <div class="thumb-mock">
+              <div class="tb-img"></div>
+              <div class="tb ac"></div>
+              <div class="tb"></div>
+              <div class="tb" style="width:45%;"></div>
+            </div>
+          </div>
+          <div class="page-card-body">
+            <div class="page-card-row">
+              <div>
+                <div class="page-card-name">Landing principal</div>
+                <div class="page-card-slug">/landing</div>
+              </div>
+              <button class="menu-btn" onclick="event.stopPropagation()">···</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:20px;background:#141414;border:1px solid #1f1f1f;border-radius:12px;padding:20px;">
+        <h3 style="font-size:14px;color:#bbb;margin-bottom:6px;">Código de tracking</h3>
+        <p style="font-size:12.5px;color:#444;line-height:1.7;margin-bottom:14px;">
+          Pegá este script en el <code
+            style="background:#1a1a1a;padding:1px 5px;border-radius:3px;color:#777;">&lt;head&gt;</code> de tu landing
+          para trackear visitas y clicks al botón de WhatsApp.
+        </p>
+        <div style="display:flex;gap:8px;">
+          <div id="trackingCodeBox"
+            style="flex:1;background:#0c0c0c;border:1px solid #1a1a1a;border-radius:8px;padding:12px;font-size:11.5px;font-family:monospace;color:#555;white-space:pre-wrap;max-height:120px;overflow-y:auto;">
+          </div>
+          <button class="btn btn-secondary" style="align-self:flex-start;" onclick="copyTrackingCode()">
+            <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+            </svg>
+            Copiar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LÍNEAS ── -->
+    <div id="page-lineas" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Líneas de WhatsApp</h1>
+        <button class="btn btn-primary" onclick="refreshQR()">
+          <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2">
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
+          </svg>
+          Obtener QR
+        </button>
+      </div>
+      <div class="lineas-grid">
+        <div class="linea-card">
+          <div class="linea-header">
+            <span class="linea-name">WhatsApp principal</span>
+            <span class="linea-badge">Evolution API</span>
+          </div>
+          <div class="status-row">
+            <div class="dot dot-yellow" id="lineaDot"></div>
+            <span class="sl-yellow" id="lineaStatus">Verificando...</span>
+          </div>
+          <div class="linea-sub" id="lineaSub">Cargando estado...</div> <button id="lineaDesconectar"
+            onclick="disconnectInstance()"
+            style="display:none;margin-top:10px;padding:6px 14px;background:transparent;border:1px solid #c0392b;color:#c0392b;border-radius:6px;font-size:12px;cursor:pointer;">Desconectar</button>
+          <!-- QR -->
+          <div id="qrZone" style="display:none;">
+            <div class="qr-instructions">
+              1. Abrí WhatsApp en tu celular<br>
+              2. Tocá ⋮ → <strong>Dispositivos vinculados</strong><br>
+              3. Escaneá este código QR
+            </div>
+            <div class="qr-container"><img id="qrImg" src="" alt="QR"></div>
+          </div>
+          <!-- Connected -->
+          <div id="connectedZone" style="display:none;margin:10px 0 14px;">
+            <div
+              style="display:flex;align-items:center;gap:8px;padding:12px;background:rgba(0,200,138,.05);border:1px solid rgba(0,200,138,.12);border-radius:8px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="#00c88a" fill="none" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span style="font-size:13px;color:#00c88a;">WhatsApp conectado</span>
+            </div>
+            <p style="font-size:12px;color:#333;margin-top:8px;line-height:1.6;">Los comprobantes de transferencia serán
+              detectados automáticamente por IA y registrados como ventas.</p>
+          </div>
+          <div class="linea-footer">
+            <button class="btn-act" id="lineaBtn" onclick="refreshQR()">
+              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2">
+                <rect x="3" y="3" width="5" height="5" />
+                <rect x="16" y="3" width="5" height="5" />
+                <rect x="3" y="16" width="5" height="5" />
+                <line x1="21" y1="21" x2="16" y2="16" />
+                <line x1="21" y1="16" x2="21" y2="21" />
+                <line x1="16" y1="21" x2="21" y2="21" />
+              </svg>
+              Conectar con QR
+            </button>
+            <button class="btn-more">···</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="webhook-box" style="display:none">
+        <h3>Configurar webhook</h3>
+        <p>
+          Para que WhatsApp envíe los mensajes al servidor, configurá el webhook con tu URL pública.<br>
+          Local: usá <strong style="color:#555;">ngrok</strong> · Producción: usá tu URL de Railway.
+        </p>
+        <div class="input-row">
+          <input type="text" class="text-input" id="webhookUrl" placeholder="https://tu-servidor.railway.app">
+          <button class="btn btn-primary" onclick="setupWebhook()">Configurar</button>
+        </div>
+        <div style="font-size:11px;color:#2a2a2a;margin-top:8px;">El webhook quedará apuntando a <span
+            id="webhookPreview" style="color:#333;">[URL]/webhook</span></div>
+      </div>
+    </div>
+
+  </main>
+  <div id="toast"></div>
+  <div id="imgModal"><button onclick="closeModal()">✕</button><img id="modalImg" src="" alt="Comprobante"></div>
+
+  <script>
+    // ── STATE ──
+    let allEvents = [], currentRange = '30d', charts = {}, ws, qrTimer;
+
+    // ── INIT ──
+    const ACCOUNTS = {
+      cande: { name: 'Tarot con Naomi', url: 'https://evolutionconversion.up.railway.app/dashboard.html' },
+      axel:  { name: 'Axel Guzmán',     url: 'https://convertix-server-production.up.railway.app/dashboard.html' }
+    };
+    let currentInstance = null;
+
+    async function loadAccountInfo() {
+      try {
+        const s = await fetch('/api/status').then(r => r.json());
+        currentInstance = s.instance;
+        const me = ACCOUNTS[currentInstance];
+        const other = Object.entries(ACCOUNTS).find(([k]) => k !== currentInstance);
+        if (me) document.getElementById('accountName').textContent = me.name;
+        if (other) {
+          document.getElementById('accountSwitchLabel').textContent = 'Ir a ' + other[1].name;
+          document.getElementById('accountSwitchBtn').style.display = 'flex';
+        }
+      } catch(e) {}
+    }
+
+    function switchAccount() {
+      const other = Object.entries(ACCOUNTS).find(([k]) => k !== currentInstance);
+      if (other) location.href = other[1].url;
+    }
+
+    (async function init() {
+      buildTrackingCode();
+      connectWS();
+      await fetch('/api/events?limit=1000').then(r => r.json()).then(d => { allEvents = d; renderAll(); }).catch(() => { });
+      checkStatus();
+      loadAccountInfo();
+    })();
+
+    // ── WEBSOCKET ──
+    function connectWS() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}`);
+      ws.onopen = () => { setWS(true); };
+      ws.onclose = () => { setWS(false); setTimeout(connectWS, 3000); };
+      ws.onmessage = e => {
+        const m = JSON.parse(e.data);
+        if (m.type === 'history') {
+          // Mergear: agregar eventos del WS que no estén ya cargados por el HTTP fetch
+          const ids = new Set(allEvents.map(e => String(e.id)));
+          const nuevos = m.data.filter(e => !ids.has(String(e.id)));
+          if (nuevos.length) { allEvents = [...allEvents, ...nuevos].sort((a, b) => a.ts < b.ts ? 1 : -1); renderAll(); }
+        }
+        else if (m.type === 'new_event') {
+          allEvents.unshift(m.data);
+          renderAll();
+          if (m.data.tipo === 'TRANSFERENCIA') toast('💰 Nueva venta: ' + fmt(m.data.monto || 0) + ' ARS', 'ok');
+        }
+        else if (m.type === 'cleared') { allEvents = []; renderAll(); }
+      };
+    }
+    function setWS(ok) {
+      document.getElementById('wsDot').className = 'ws-dot' + (ok ? ' connected' : ' error');
+      document.getElementById('statusTxt').textContent = ok ? 'En vivo' : 'Reconectando...';
+    }
+
+    async function checkWAStatus() {
+      try {
+        const s = await fetch('/api/wa-status').then(r => r.json());
+        const dot = document.getElementById('waDot');
+        const txt = document.getElementById('waTxt');
+        if (s.state === 'open') {
+          dot.style.background = '#00c88a';
+          txt.textContent = 'WA conectado';
+          txt.style.color = '#00c88a';
+        } else if (s.state === 'disconnected') {
+          dot.style.background = '#ff4444';
+          txt.textContent = 'WA DESCONECTADO';
+          txt.style.color = '#ff4444';
+        } else {
+          dot.style.background = '#f59e0b';
+          txt.textContent = `WA: ${s.state}`;
+          txt.style.color = '#f59e0b';
+        }
+      } catch {}
+    }
+    checkWAStatus();
+    setInterval(checkWAStatus, 2 * 60 * 1000);
+
+    // ── DATE RANGE ──
+    function getRangeDates() {
+      const now = new Date(), s = new Date();
+      if (currentRange === 'hoy') s.setHours(0, 0, 0, 0);
+      else s.setDate(now.getDate() - (parseInt(currentRange) || 30));
+      return { start: s, end: now };
+    }
+    function inRange(ts) { const { start, end } = getRangeDates(), d = new Date(ts); return d >= start && d <= end; }
+    function filtered(tipo) { return allEvents.filter(e => e.tipo === tipo && inRange(e.ts)); }
+
+    // ── RENDER ALL ──
+    function renderAll() { renderAnalytics(); renderVentas(); renderContactos(); }
+
+    // ── ANALYTICS ──
+    function renderAnalytics() {
+      const v = filtered('TRANSFERENCIA'), ch = filtered('MENSAJE'),
+        cl = filtered('CLICK'), vi = filtered('VISITA');
+      const hasData = allEvents.some(e => e.tipo === 'TRANSFERENCIA');
+      document.getElementById('analytics-empty').style.display = hasData ? 'none' : 'flex';
+      document.getElementById('analytics-content').style.display = hasData ? 'block' : 'none';
+      if (!hasData) return;
+
+      const monto = v.reduce((s, e) => s + (e.monto || 0), 0);
+      const phones = [...new Set(ch.map(e => e.phone))].length;
+      document.getElementById('kpiVentas').textContent = v.length;
+      document.getElementById('kpiMonto').textContent = monto ? '$' + fmt(monto) : '';
+      document.getElementById('kpiChats').textContent = phones;
+      document.getElementById('kpiClicks').textContent = cl.length;
+      document.getElementById('kpiVisitas').textContent = vi.length;
+
+      const { start, end } = getRangeDates(), lbl = fmtDate(start) + ' — ' + fmtDate(end);
+      document.getElementById('dateRange').textContent = lbl;
+      document.querySelectorAll('.dynDate').forEach(el => el.textContent = lbl);
+
+      const pct = (a, b) => b > 0 ? (Math.min(a / b, 1) * 100).toFixed(1) + '%' : '—';
+      const base = vi.length;  // visitas es siempre el 100%
+      document.getElementById('convVC').textContent = pct(cl.length, base);
+      document.getElementById('convCH').textContent = pct(phones, base);
+      document.getElementById('convVS').textContent = pct(v.length, base);
+      document.getElementById('convHS').textContent = pct(v.length, phones);  // único step-to-step útil
+
+      const days = currentRange === 'hoy' ? 1 : (parseInt(currentRange) || 30);
+      const lbls = dayLabels(days);
+      mkChart('chartVentas', lbls, byDay(v, days), 'rgb(0,212,168)');
+      mkChart('chartChats', lbls, byDay(ch, days), 'rgb(66,133,244)');
+      mkChart('chartClicks', lbls, byDay(cl, days), 'rgb(66,133,244)');
+      mkChart('chartVisitas', lbls, byDay(vi, days), 'rgb(66,133,244)');
+    }
+
+    function dayLabels(n) {
+      const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'], r = [];
+      for (let i = n - 1; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); r.push(d.getDate() + ' ' + months[d.getMonth()]); }
+      return r;
+    }
+    function byDay(evts, days) {
+      const c = new Array(days).fill(0);
+      const now = new Date();
+      const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      evts.forEach(e => {
+        const d = new Date(e.ts);
+        const dLocal = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const diff = Math.round((todayLocal - dLocal) / 86400000);
+        const i = days - 1 - diff;
+        if (i >= 0 && i < days) c[i]++;
+      });
+      return c;
+    }
+    function mkChart(id, labels, data, color) {
+      const ctx = document.getElementById(id); if (!ctx) return;
+      if (charts[id]) charts[id].destroy();
+      charts[id] = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ data, borderColor: color, backgroundColor: color.replace('rgb', 'rgba').replace(')', ',0.1)'), fill: true, borderWidth: 2, tension: 0.4, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: color }] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { enabled: true, backgroundColor: '#1a1a1a', borderColor: '#333', borderWidth: 1, titleColor: '#aaa', bodyColor: '#fff', titleFont: { size: 11 }, bodyFont: { size: 13, weight: 'bold' }, padding: 10, displayColors: false, callbacks: { title: (items) => items[0]?.label || '', label: (item) => item.raw } } }, scales: { x: { ticks: { color: '#2a2a2a', font: { size: 10 }, maxTicksLimit: 5 }, grid: { display: false }, border: { display: false } }, y: { display: false } } } });
+    }
+
+    // ── VENTAS ──
+    function renderVentas() {
+      const v = filtered('TRANSFERENCIA');
+      const q = (document.getElementById('searchVentas')?.value || '').toLowerCase();
+      const rows = v.filter(e => !q || (e.nombre_emisor || e.name || '').toLowerCase().includes(q) || (e.phone || '').includes(q));
+      const empty = document.getElementById('ventas-empty'), tbl = document.getElementById('ventasTable');
+      if (!rows.length) { empty.style.display = 'flex'; tbl.style.display = 'none'; }
+      else {
+        empty.style.display = 'none'; tbl.style.display = '';
+        document.getElementById('ventas-body').innerHTML = rows.map(e => {
+          const n = e.nombre_emisor || e.name || 'Desconocido', c = ac(n);
+          const verBtn = e.imagen_base64
+            ? `<button onclick="openModal('${e.id}')" style="padding:4px 10px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:6px;color:#aaa;font-size:12px;cursor:pointer;">Ver</button>`
+            : `<span style="color:#333;font-size:12px;">—</span>`;
+          return `<tr>
+        <td><div class="client-cell"><div class="avatar" style="background:${c.bg};color:${c.fg}">${n[0]?.toUpperCase() || '?'}</div><span style="color:#ccc;">${n}</span></div></td>
+        <td><span class="ref-code">${e.phone || '—'}</span></td>
+        <td style="color:#444;font-size:12px;">${fmtDT(e.ts)}</td>
+        <td><span class="monto-val">${e.monto ? '$' + fmt(e.monto) : '—'}</span></td>
+        <td>${verBtn}</td>
+      </tr>`;
+        }).join('');
+      }
+      const total = rows.reduce((s, e) => s + (e.monto || 0), 0);
+      document.getElementById('ventas-count').textContent = 'Total: ' + rows.length;
+      document.getElementById('ventas-total').textContent = total ? '$' + fmt(total) + ' ARS' : '';
+    }
+
+    // ── CONTACTOS ──
+    function renderContactos() {
+      const v = filtered('TRANSFERENCIA');
+      const q = (document.getElementById('searchContactos')?.value || '').toLowerCase();
+      const map = {};
+      v.forEach(e => {
+        const k = e.phone || '?';
+        if (!map[k]) map[k] = { name: e.nombre_emisor || e.name || 'Desconocido', phone: e.phone, items: [], last: e.ts };
+        map[k].items.push(e);
+        if (e.ts > map[k].last) map[k].last = e.ts;
+      });
+      let contacts = Object.values(map).sort((a, b) => new Date(b.last) - new Date(a.last));
+      if (q) contacts = contacts.filter(c => c.name.toLowerCase().includes(q) || (c.phone || '').includes(q));
+      const empty = document.getElementById('contactos-empty'), tbl = document.getElementById('contactosTable');
+      if (!contacts.length) { empty.style.display = 'flex'; tbl.style.display = 'none'; }
+      else {
+        empty.style.display = 'none'; tbl.style.display = '';
+        document.getElementById('contactos-body').innerHTML = contacts.map(c => {
+          const t = c.items.reduce((s, e) => s + (e.monto || 0), 0), col = ac(c.name);
+          return `<tr>
+        <td><div class="client-cell"><div class="avatar" style="background:${col.bg};color:${col.fg}">${c.name[0]?.toUpperCase() || '?'}</div><span style="color:#ccc;">${c.name}</span>${t ? `<span class="contact-amount">$${fmt(t)}</span>` : ''}</div></td>
+        <td style="font-size:12px;color:#444;">${c.phone || '—'}</td>
+        <td style="font-size:12px;color:#444;">${fmtDate(new Date(c.last))}</td>
+        <td style="color:#666;">${c.items.length}</td>
+        <td class="monto-val">${t ? '$' + fmt(t) : '—'}</td>
+        <td><span class="badge badge-conv"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Conversión</span></td>
+      </tr>`;
+        }).join('');
+      }
+      document.getElementById('contactos-count').textContent = 'Total: ' + contacts.length;
+    }
+
+    // ── LIMPIAR ──
+    async function clearEvents() {
+      const input = prompt('Esto borra TODAS las ventas de Postgres.\nEscribí BORRAR para confirmar:');
+      if (input !== 'BORRAR') return;
+      await fetch('/api/events', { method: 'DELETE' });
+      toast('Datos eliminados', 'ok');
+    }
+
+    // ── EXPORT ──
+    function exportContactos() {
+      const v = filtered('TRANSFERENCIA'), map = {};
+      v.forEach(e => { const k = e.phone || '?'; if (!map[k]) map[k] = { name: e.nombre_emisor || e.name || 'Desconocido', phone: e.phone, count: 0, total: 0, last: e.ts }; map[k].count++; map[k].total += e.monto || 0; if (e.ts > map[k].last) map[k].last = e.ts; });
+      const rows = [['Nombre', 'Teléfono', 'Compras', 'Total ARS', 'Última venta'], ...Object.values(map).map(c => [c.name, c.phone, c.count, c.total, fmtDT(c.last)])];
+      const blob = new Blob([rows.map(r => r.join(',')).join('\n')], { type: 'text/csv' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'contactos.csv'; a.click();
+      toast('CSV exportado', 'ok');
+    }
+
+    // ── LÍNEAS / QR ──
+    async function checkStatus() {
+      try { const r = await fetch('/api/instance-status'), d = await r.json(); updateLinea(d?.connected ? 'open' : (d?.status || 'unknown'), d?.number, d?.profileName); }
+      catch (e) { updateLinea('error'); }
+    }
+    function updateLinea(state, number, profileName) {
+      const dot = document.getElementById('lineaDot'), lbl = document.getElementById('lineaStatus'),
+        sub = document.getElementById('lineaSub'), qz = document.getElementById('qrZone'),
+        cz = document.getElementById('connectedZone'), btn = document.getElementById('lineaBtn'),
+        desconectar = document.getElementById('lineaDesconectar');
+      if (state === 'open') {
+        dot.className = 'dot dot-green'; lbl.className = 'sl-green'; lbl.textContent = 'Conectado';
+        sub.textContent = number ? '+' + number + (profileName ? ' · ' + profileName : '') : 'WhatsApp activo.';
+        qz.style.display = 'none'; cz.style.display = 'block';
+        btn.textContent = '✓ Conectado'; clearInterval(qrTimer);
+        if (desconectar) desconectar.style.display = 'block';
+        // Auto-configurar webhook al conectar
+        fetch('/api/set-webhook', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:location.origin})}).catch(()=>{});
+      } else if (state === 'connecting' || state === 'qrcode') {
+        dot.className = 'dot dot-yellow'; lbl.className = 'sl-yellow'; lbl.textContent = 'Esperando escaneo...';
+        sub.textContent = 'Escaneá el QR con tu celular para conectar.';
+        cz.style.display = 'none'; qz.style.display = 'block';
+        if (desconectar) desconectar.style.display = 'none';
+      } else {
+        dot.className = 'dot dot-red'; lbl.className = 'sl-red'; lbl.textContent = 'No conectado';
+        sub.textContent = 'Hacé click en "Obtener QR" para conectar tu WhatsApp.';
+        qz.style.display = 'none'; cz.style.display = 'none';
+        if (desconectar) desconectar.style.display = 'none';
+      }
+    }
+    async function refreshQR() {
+      document.getElementById('lineaStatus').textContent = 'Obteniendo QR...';
+      try {
+        const r = await fetch('/api/qr'), d = await r.json();
+        const b64 = d.base64 || d.qrcode?.base64 || null, state = d.instance?.state || null;
+        if (state === 'open') { updateLinea('open'); return; }
+        if (b64) {
+          document.getElementById('qrImg').src = b64.startsWith('data:') ? b64 : 'data:image/png;base64,' + b64;
+          document.getElementById('qrZone').style.display = 'block';
+          document.getElementById('connectedZone').style.display = 'none';
+          document.getElementById('lineaDot').className = 'dot dot-yellow';
+          document.getElementById('lineaStatus').className = 'sl-yellow';
+          document.getElementById('lineaStatus').textContent = 'Esperando escaneo...';
+          clearInterval(qrTimer);
+          qrTimer = setTimeout(function() { checkStatus(); qrTimer = setInterval(checkStatus, 5000); }, 15000);
+        } else toast('No se pudo obtener el QR. Verificá que Evolution API esté activa.', 'err');
+      } catch (e) { toast('Error: ' + e.message, 'err'); }
+    }
+    async function setupWebhook(silent) {
+      const url = document.getElementById('webhookUrl').value.trim() || location.origin;
+      document.getElementById('webhookUrl').value = url;
+      document.getElementById('webhookPreview').textContent = url + '/webhook';
+      try {
+        const r = await fetch('/api/set-webhook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        if (!silent) toast('Webhook configurado: ' + url + '/webhook', 'ok');
+      } catch (e) { if (!silent) toast('Error: ' + e.message, 'err'); }
+    }
+    document.getElementById('webhookUrl').addEventListener('input', function () {
+      document.getElementById('webhookPreview').textContent = (this.value || '[URL]') + '/webhook';
+    });
+    // Auto-configurar webhook al cargar la página
+    document.getElementById('webhookUrl').value = location.origin;
+    document.getElementById('webhookPreview').textContent = location.origin + '/webhook';
+    setupWebhook(true);
+
+    // ── TRACKING CODE ──
+    function buildTrackingCode() {
+      const code = `<!-- Evolution Conversion Tracking -->\n<script>\n(function(){\n  var S='${location.origin}';\n  var ref=new URLSearchParams(location.search).get('ref')||sessionStorage.getItem('ec_ref')||'organico';\n  if(new URLSearchParams(location.search).get('ref'))sessionStorage.setItem('ec_ref',ref);\n  fetch(S+'/api/track',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'visit',ref:ref})});\n  document.addEventListener('DOMContentLoaded',function(){\n    document.querySelectorAll('a[href*="wa.me"],a.wpp-btn,.btn-whatsapp').forEach(function(btn){\n      btn.addEventListener('click',function(){\n        fetch(S+'/api/track',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'click',ref:ref})});\n      });\n    });\n  });\n})();\n<\/script>`;
+      const box = document.getElementById('trackingCodeBox');
+      if (box) box.textContent = code;
+    }
+    function copyTrackingCode() {
+      const box = document.getElementById('trackingCodeBox');
+      navigator.clipboard.writeText(box?.textContent || '').then(() => toast('Código copiado', 'ok'));
+    }
+
+    // ── NAVIGATION ──
+    function nav(id, el) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('page-' + id).classList.add('active');
+      el.classList.add('active');
+      if (id === 'lineas') checkStatus();
+      if (id === 'paginas') buildTrackingCode();
+    }
+    function setRange(r, btn) {
+      currentRange = r;
+      btn.closest('.filters')?.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAll();
+    }
+
+    // ── HELPERS ──
+    function fmt(n) { return Number(n).toLocaleString('es-AR'); }
+    function fmtDate(d) { return new Date(d).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }); }
+    function fmtDT(ts) { const d = new Date(ts); return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }); }
+    const COLORS = [{ bg: '#0e2018', fg: '#00c88a' }, { bg: '#0e0e22', fg: '#4285f4' }, { bg: '#220e0e', fg: '#e74c3c' }, { bg: '#200e22', fg: '#b06ce8' }, { bg: '#22200e', fg: '#f0a500' }, { bg: '#0e2022', fg: '#00bcd4' }];
+    function ac(name) { let h = 0; for (let i = 0; i < name.length; i++)h = name.charCodeAt(i) + ((h << 5) - h); return COLORS[Math.abs(h) % COLORS.length]; }
+    function openModal(id) {
+      const e = allEvents.find(ev => String(ev.id) === String(id));
+      if (!e?.imagen_base64) return;
+      document.getElementById('modalImg').src = e.imagen_base64;
+      document.getElementById('imgModal').classList.add('open');
+    }
+    function closeModal() {
+      document.getElementById('imgModal').classList.remove('open');
+      document.getElementById('modalImg').src = '';
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    let toastT;
+    function toast(msg, type = '') {
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.className = 'show' + (type ? ' ' + type : '');
+      clearTimeout(toastT); toastT = setTimeout(() => el.className = '', 3200);
+    }
+
+    
+    async function disconnectInstance() {
+      if (!confirm('¿Desconectar WhatsApp?')) return;
+      try {
+        await fetch('/api/instance-disconnect', { method: 'POST' });
+      } catch (e) { /* ignorar error si ya estaba desconectado */ }
+      toast('Desconectado — generando QR...', 'ok');
+      await new Promise(r => setTimeout(r, 2000));
+      updateLinea('disconnected');
+      await new Promise(r => setTimeout(r, 500));
+      refreshQR();
+    }
+  </script>
+</body>
+
+</html>
