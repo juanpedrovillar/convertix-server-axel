@@ -500,6 +500,22 @@
     }
 
     /* ── BADGES ── */
+    #contactosTable td:last-child, #contactosTable th:last-child { text-align: left; }
+    #contactosTable td { vertical-align: middle; }
+    .estado-sel {
+      background:#161616; color:#ccc; border:1px solid #2a2a2a; border-radius:6px;
+      padding:4px 8px; font-size:12px; font-family:inherit; cursor:pointer; width:100%;
+    }
+    .estado-sel:hover { border-color:#3a3a3a; }
+    .estado-sel.e-pago { color:#4ade80; border-color:#1e4620; }
+    .estado-sel.e-interesado, .estado-sel.e-esperando_pago { color:#fbbf24; border-color:#463a1e; }
+    .estado-sel.e-spam, .estado-sel.e-sin_respuesta { color:#666; }
+    .notas-cell {
+      color:#999; font-size:12px; line-height:1.5; min-height:20px; white-space:pre-wrap;
+      padding:4px 6px; border-radius:6px; border:1px solid transparent; outline:none;
+    }
+    .notas-cell:hover { border-color:#2a2a2a; }
+    .notas-cell:focus { border-color:#3a6ea5; background:#111; color:#ddd; }
     .badge {
       display: inline-flex;
       align-items: center;
@@ -1195,7 +1211,7 @@
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          Exportar CSV
+          Descargar Excel
         </button>
       </div>
       <div class="table-controls">
@@ -1213,17 +1229,16 @@
           <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
           <circle cx="9" cy="7" r="4" />
         </svg>
-        <p>Los contactos aparecerán aquí cuando lleguen comprobantes de transferencia por WhatsApp.</p>
+        <p>Cada persona que escriba por WhatsApp desde la landing queda guardada acá, haya comprado o no.</p>
       </div>
       <table class="data-table" id="contactosTable" style="display:none;">
         <thead>
           <tr>
-            <th>Contacto</th>
-            <th>Teléfono</th>
-            <th>Última venta</th>
-            <th>Compras</th>
-            <th>Total</th>
-            <th>Etapa</th>
+            <th style="width:70px;">Nº</th>
+            <th style="width:150px;">Teléfono</th>
+            <th>Nombre</th>
+            <th style="width:150px;">Estado</th>
+            <th>Notas</th>
           </tr>
         </thead>
         <tbody id="contactos-body"></tbody>
@@ -1407,6 +1422,7 @@
       await fetch('/api/events?limit=1000').then(r => r.json()).then(d => { allEvents = d; renderAll(); }).catch(() => { });
       checkStatus();
       loadAccountInfo();
+      loadContactos();
     })();
 
     // ── WEBSOCKET ──
@@ -1427,6 +1443,12 @@
           allEvents.unshift(m.data);
           renderAll();
           if (m.data.tipo === 'TRANSFERENCIA') toast('💰 Nueva venta: ' + fmt(m.data.monto || 0) + ' ARS', 'ok');
+        }
+        else if (m.type === 'contacto') {
+          const i = contactosData.findIndex(x => x.id === m.data.id);
+          if (i >= 0) contactosData[i] = m.data; else contactosData.push(m.data);
+          // no repintar si estás escribiendo una nota
+          if (!document.activeElement?.isContentEditable) renderContactos();
         }
         else if (m.type === 'cleared') { allEvents = []; renderAll(); }
       };
@@ -1561,7 +1583,55 @@
     }
 
     // ── CONTACTOS ──
+    let contactosData = [];
+    const ESTADOS_CONTACTO = ['nuevo','interesado','consultando','esperando_pago','pago','sin_respuesta','spam'];
+    const escHtml = t => String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    async function loadContactos() {
+      try { contactosData = await fetch('/api/contactos').then(r => r.json()); renderContactos(); }
+      catch (e) { console.error('contactos:', e); }
+    }
+
     function renderContactos() {
+      const q = (document.getElementById('searchContactos')?.value || '').toLowerCase();
+      let lista = contactosData;
+      if (q) lista = lista.filter(c => (c.nombre || '').toLowerCase().includes(q) || String(c.telefono || '').includes(q));
+
+      const empty = document.getElementById('contactos-empty'), tbl = document.getElementById('contactosTable');
+      if (!lista.length) { empty.style.display = 'flex'; tbl.style.display = 'none'; }
+      else {
+        empty.style.display = 'none'; tbl.style.display = '';
+        document.getElementById('contactos-body').innerHTML = lista.map(c => {
+          const nom = c.nombre || 'Sin nombre', col = ac(nom);
+          const opts = ESTADOS_CONTACTO.map(e =>
+            `<option value="${e}"${c.estado === e ? ' selected' : ''}>${e.replace(/_/g, ' ')}</option>`).join('');
+          return `<tr>
+        <td style="color:#555;">${c.nro || '—'}</td>
+        <td style="font-size:12px;color:#777;">${escHtml(c.telefono)}</td>
+        <td><div class="client-cell"><div class="avatar" style="background:${col.bg};color:${col.fg}">${escHtml(nom[0].toUpperCase())}</div><span style="color:#ccc;">${escHtml(nom)}</span></div></td>
+        <td><select class="estado-sel e-${escHtml(c.estado)}" onchange="saveContacto(${c.id}, { estado: this.value }, this)">${opts}</select></td>
+        <td><div class="notas-cell" contenteditable="true" spellcheck="false" onblur="saveContacto(${c.id}, { notas: this.innerText })">${escHtml(c.notas)}</div></td>
+      </tr>`;
+        }).join('');
+      }
+      document.getElementById('contactos-count').textContent = 'Total: ' + lista.length;
+    }
+
+    async function saveContacto(id, cambios, el) {
+      try {
+        const r = await fetch('/api/contactos/' + id, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cambios),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const c = await r.json();
+        const i = contactosData.findIndex(x => x.id === c.id);
+        if (i >= 0) contactosData[i] = c;
+        if (el && cambios.estado) el.className = 'estado-sel e-' + c.estado;
+        toast('Guardado', 'ok');
+      } catch (e) { toast('No se pudo guardar', 'err'); }
+    }
+
+    function renderContactosViejo() {
       const v = filtered('TRANSFERENCIA');
       const q = (document.getElementById('searchContactos')?.value || '').toLowerCase();
       const map = {};
@@ -1602,6 +1672,11 @@
 
     // ── EXPORT ──
     function exportContactos() {
+      window.location = '/api/contactos/export.xlsx';
+      toast('Descargando Excel...', 'ok');
+    }
+
+    function exportContactosViejo() {
       const v = filtered('TRANSFERENCIA'), map = {};
       v.forEach(e => { const k = e.phone || '?'; if (!map[k]) map[k] = { name: e.nombre_emisor || e.name || 'Desconocido', phone: e.phone, count: 0, total: 0, last: e.ts }; map[k].count++; map[k].total += e.monto || 0; if (e.ts > map[k].last) map[k].last = e.ts; });
       const rows = [['Nombre', 'Teléfono', 'Compras', 'Total ARS', 'Última venta'], ...Object.values(map).map(c => [c.name, c.phone, c.count, c.total, fmtDT(c.last)])];
@@ -1696,6 +1771,7 @@
       el.classList.add('active');
       if (id === 'lineas') checkStatus();
       if (id === 'paginas') buildTrackingCode();
+      if (id === 'contactos') loadContactos();
     }
     function setRange(r, btn) {
       currentRange = r;

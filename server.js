@@ -7,6 +7,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 import pg from 'pg';
+import * as contactos from './contactos.js';
+import { buildXlsx } from './excel.js';
 
 const { Pool } = pg;
 
@@ -30,6 +32,15 @@ if (existsSync('.env')) {
   }
 }
 
+function landingPorInstancia() {
+  const inst = process.env.EVOLUTION_INSTANCE || '';
+  const propia = `${inst}_landing.html`;
+  try {
+    if (inst && existsSync(path.join(path.dirname(fileURLToPath(import.meta.url)), propia))) return propia;
+  } catch {}
+  return 'landing.html';
+}
+
 const CONFIG = {
   EVOLUTION_URL:      process.env.EVOLUTION_URL      || 'https://evolution-api-production-c34d.up.railway.app',
   EVOLUTION_APIKEY:   process.env.EVOLUTION_APIKEY   || 'convertix123',
@@ -39,12 +50,21 @@ const CONFIG = {
   META_CAPI_TOKEN:    process.env.META_CAPI_TOKEN,
   META_TEST_CODE:     process.env.META_TEST_CODE      || '',
   DATABASE_URL:       process.env.DATABASE_URL,
+
+  // ── Identidad del cliente ────────────────────────────────────────────────
+  // Nada de nombres de clientes hardcodeados: cada Railway define quién es.
+  // Si no está seteada, busca "<instancia>_landing.html" y si no existe usa la genérica.
+  // Sigue sin haber nombres de clientes en el código.
+  CLIENT_LANDING:     process.env.CLIENT_LANDING     || landingPorInstancia(),
+  CLIENT_KEYWORD:     process.env.CLIENT_KEYWORD     || '10% de descuento',
+  CLIENT_NAME:        process.env.CLIENT_NAME        || 'Cliente',
 };
 
 // ── Postgres ───────────────────────────────────────────────────────────────
 let pool = null;
 if (CONFIG.DATABASE_URL) {
   pool = new Pool({ connectionString: CONFIG.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  contactos.initSchema(pool).catch(e => console.error('[contactos] initSchema:', e.message));
   pool.query(`
     CREATE TABLE IF NOT EXISTS events (
       id BIGINT PRIMARY KEY,
@@ -161,8 +181,7 @@ wss.on('connection', ws => {
 
 // ── Landing page ───────────────────────────────────────────────────────────
 app.get('/landing', (req, res) => {
-  const file = 'axel_landing.html';
-  res.sendFile(path.join(__dirname, file));
+  res.sendFile(path.join(__dirname, CONFIG.CLIENT_LANDING));
 });
 
 // ── API endpoints ──────────────────────────────────────────────────────────
@@ -172,6 +191,8 @@ app.get('/api/status', (req, res) => {
     service: 'Evolution Conversion',
     version: '2.0.0',
     instance: CONFIG.EVOLUTION_INSTANCE,
+    landing: CONFIG.CLIENT_LANDING,
+    keyword: CONFIG.CLIENT_KEYWORD,
     pixel: CONFIG.META_PIXEL_ID,
     anthropic_key: CONFIG.ANTHROPIC_KEY ? '✅ cargada' : '❌ falta',
     meta_token: CONFIG.META_CAPI_TOKEN ? '✅ cargado' : '❌ falta',
@@ -393,12 +414,12 @@ app.post('/webhook', async (req, res) => {
     const name  = data.pushName || 'Desconocido';
 
     // Detectar chats iniciados desde la landing (mensaje pre-llenado del botón WPP)
-    const KEYWORD_LANDING = 'necesito tu ayuda';
     const textMsg = data.message?.conversation || data.message?.extendedTextMessage?.text || '';
-    if (textMsg.includes(KEYWORD_LANDING)) {
+    if (matchKeyword(textMsg, CONFIG.CLIENT_KEYWORD)) {
       landingPhones.add(phone);
       if (pool) pool.query('INSERT INTO landing_phones (phone) VALUES ($1) ON CONFLICT DO NOTHING', [phone]).catch(() => {});
       logEntry('MENSAJE', `Chat desde landing — ${name} (${phone})`, { phone, name });
+      registrarContactoSeguro(phone, name, textMsg);
       // Señal CAPI: Contact (mensaje recibido = interés real)
       dispararMetaCAPILanding('Contact', 'organico', { ph: phone });
       return;
@@ -406,6 +427,9 @@ app.post('/webhook', async (req, res) => {
 
     // Solo procesar comprobantes de clientes que iniciaron desde la landing
     if (!landingPhones.has(phone)) return;
+
+    // Cada mensaje actualiza la ficha del contacto (no bloquea el flujo)
+    if (textMsg) registrarContactoSeguro(phone, name, textMsg);
 
     // Solo procesar imágenes y documentos (comprobantes reales).
     let resultado;
@@ -427,6 +451,10 @@ app.post('/webhook', async (req, res) => {
         phone, name, ...resultado, monto: montoDisplay, moneda: monedaDisplay,
       });
       await dispararMetaCAPI({ phone, name, ...resultado });
+      if (pool) {
+        contactos.marcarPago(pool, phone, { monto: montoDisplay, moneda: monedaDisplay })
+          .catch(e => console.error('[contactos] marcarPago:', e.message));
+      }
     } else {
       logEntry('NO_TRANSFERENCIA', `Mensaje de ${name} descartado`, { phone });
     }
@@ -685,6 +713,20 @@ async function dispararMetaCAPI({ phone, name, nombre_emisor, monto, moneda }) {
 }
 
 // ── HELPER ─────────────────────────────────────────────────────────────────
+/** Compara ignorando mayúsculas, acentos y espacios de más. */
+function normalizar(t) {
+  return String(t || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchKeyword(texto, keyword) {
+  if (!keyword) return false;
+  return normalizar(texto).includes(normalizar(keyword));
+}
+
 function parsearJSON(text) {
   if (!text) return null;
   try { return JSON.parse(text); } catch {
@@ -736,11 +778,81 @@ async function checkWAConnection() {
   }
 }
 
+// ── CONTACTOS ──────────────────────────────────────────────────────────────
+
+/** Registra sin bloquear el webhook: si falla, se loguea y sigue. */
+function registrarContactoSeguro(telefono, nombre, texto) {
+  if (!pool) return;
+  contactos
+    .registrarContacto(pool, { telefono, nombre, texto, apiKey: CONFIG.ANTHROPIC_KEY })
+    .then(c => { if (c) broadcast({ type: 'contacto', data: c }); })
+    .catch(e => console.error('[contactos] registrar:', e.message));
+}
+
+app.get('/api/contactos', async (req, res) => {
+  if (!pool) return res.json([]);
+  try {
+    res.json(await contactos.listar(pool));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Edición manual de Estado y Notas desde el dashboard
+app.post('/api/contactos/:id', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'sin base de datos' });
+  try {
+    const { estado, notas, nombre } = req.body || {};
+    const { rows } = await pool.query(
+      `UPDATE contactos SET
+         estado = COALESCE($2, estado),
+         notas  = COALESCE($3, notas),
+         nombre = COALESCE($4, nombre)
+       WHERE id = $1 RETURNING *`,
+      [req.params.id, estado ?? null, notas ?? null, nombre ?? null]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'no existe' });
+    broadcast({ type: 'contacto', data: rows[0] });
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/contactos/export.xlsx', async (req, res) => {
+  if (!pool) return res.status(503).send('sin base de datos');
+  try {
+    const lista = await contactos.listar(pool);
+    const buf = buildXlsx(
+      ['Nº cliente', 'Teléfono', 'Nombre', 'Estado', 'Notas'],
+      lista.map(c => [c.nro || '', String(c.telefono || ''), c.nombre || '', c.estado || '', c.notas || '']),
+      'Contactos'
+    );
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="contactos-${CONFIG.EVOLUTION_INSTANCE}-${fecha}.xlsx"`);
+    res.send(buf);
+  } catch (e) {
+    console.error('[contactos] export:', e.message);
+    res.status(500).send(e.message);
+  }
+});
+
+// Re-sincroniza el Google Sheet si algún día se activa (opcional, no usado por defecto)
+app.post('/api/contactos/resync', async (req, res) => {
+  if (!pool) return res.status(503).json({ error: 'sin base de datos' });
+  res.json(await contactos.resync(pool));
+});
+
 // ── INICIO ─────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 cargarEventosIniciales().then(async () => {
   httpServer.listen(PORT, () => {
     console.log(`🚀 Convertix corriendo en http://localhost:${PORT}`);
+    console.log(`👤 Cliente: ${CONFIG.EVOLUTION_INSTANCE} | landing: ${CONFIG.CLIENT_LANDING} | keyword: "${CONFIG.CLIENT_KEYWORD}"`);
+    if (!process.env.CLIENT_LANDING || !process.env.CLIENT_KEYWORD) {
+      console.warn('⚠️  Faltan CLIENT_LANDING y/o CLIENT_KEYWORD en las variables de entorno — usando los valores por defecto.');
+    }
     console.log(`📊 Dashboard: http://localhost:${PORT}/dashboard.html`);
     console.log(`🔗 Webhook URL para Evolution API: http://TU-NGROK-URL/webhook`);
   });
