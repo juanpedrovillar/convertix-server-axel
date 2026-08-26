@@ -161,7 +161,7 @@ wss.on('connection', ws => {
 
 // ── Landing page ───────────────────────────────────────────────────────────
 app.get('/landing', (req, res) => {
-  const file = CONFIG.EVOLUTION_INSTANCE === 'axel' ? 'axel_landing.html' : 'landing.html';
+  const file = 'axel_landing.html';
   res.sendFile(path.join(__dirname, file));
 });
 
@@ -393,7 +393,7 @@ app.post('/webhook', async (req, res) => {
     const name  = data.pushName || 'Desconocido';
 
     // Detectar chats iniciados desde la landing (mensaje pre-llenado del botón WPP)
-    const KEYWORD_LANDING = CONFIG.EVOLUTION_INSTANCE === 'axel' ? 'necesito tu ayuda' : '10% de descuento';
+    const KEYWORD_LANDING = 'necesito tu ayuda';
     const textMsg = data.message?.conversation || data.message?.extendedTextMessage?.text || '';
     if (textMsg.includes(KEYWORD_LANDING)) {
       landingPhones.add(phone);
