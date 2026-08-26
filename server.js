@@ -187,6 +187,10 @@ wss.on('connection', ws => {
   ws.send(JSON.stringify({ type: 'history', data: events.slice(0, 50) }));
 });
 
+// ── Raíz ───────────────────────────────────────────────────────────────────
+// Entrar al dominio pelado llevaba a "Cannot GET /". Ahora va al dashboard.
+app.get('/', (req, res) => res.redirect(302, '/dashboard.html'));
+
 // ── Landing page ───────────────────────────────────────────────────────────
 app.get('/landing', (req, res) => {
   res.sendFile(path.join(__dirname, CONFIG.CLIENT_LANDING));
