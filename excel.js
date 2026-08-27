@@ -139,7 +139,7 @@ export function buildXlsx(headers, rows, sheetName = 'Hoja1') {
   });
 
   const anchos = headers
-    .map((_, i) => `<col min="${i + 1}" max="${i + 1}" width="${[10, 20, 26, 10, 18, 60][i] || 18}" customWidth="1"/>`)
+    .map((_, i) => `<col min="${i + 1}" max="${i + 1}" width="${[10, 20, 26, 8, 12, 18, 60][i] || 18}" customWidth="1"/>`)
     .join('');
 
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

@@ -503,6 +503,8 @@
     #contactosTable td:last-child, #contactosTable th:last-child { text-align: left; }
     #contactosTable td { vertical-align: middle; }
     .pago-si { color:#4ade80; font-weight:600; }
+    .origen { font-size:11px; color:#666; border:1px solid #2a2a2a; border-radius:4px; padding:2px 7px; }
+    .origen-ads { color:#7aa7e0; border-color:#25405e; }
     .pago-no { color:#555; }
     .estado-sel {
       background:#161616; color:#ccc; border:1px solid #2a2a2a; border-radius:6px;
@@ -1239,7 +1241,8 @@
             <th style="width:60px;">Nº</th>
             <th style="width:150px;">Teléfono</th>
             <th>Nombre</th>
-            <th style="width:90px;">Pagó</th>
+            <th style="width:80px;">Pagó</th>
+            <th style="width:100px;">Origen</th>
             <th style="width:150px;">Estado</th>
             <th>Notas</th>
           </tr>
@@ -1614,6 +1617,7 @@
         <td style="font-size:12px;color:#777;">${escHtml(c.telefono)}</td>
         <td><div class="client-cell"><div class="avatar" style="background:${col.bg};color:${col.fg}">${escHtml(nom[0].toUpperCase())}</div><span style="color:#ccc;">${escHtml(nom)}</span></div></td>
         <td class="${pago ? 'pago-si' : 'pago-no'}">${pago ? 'Sí' : 'No'}</td>
+        <td><span class="origen ${c.origen === 'landing' ? 'origen-ads' : ''}">${c.origen === 'landing' ? 'Anuncio' : 'Directo'}</span></td>
         <td><select class="estado-sel e-${escHtml(c.estado)}" onchange="saveContacto(${c.id}, { estado: this.value }, this)">${opts}</select></td>
         <td><div class="notas-cell" contenteditable="true" spellcheck="false" onblur="saveContacto(${c.id}, { notas: this.innerText })">${escHtml(c.notas)}</div></td>
       </tr>`;

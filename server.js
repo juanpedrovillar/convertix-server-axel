@@ -427,7 +427,10 @@ app.post('/webhook', async (req, res) => {
     if (!data?.message) return;
 
     const messageType = data.messageType;
-    const phone = data.key.remoteJid.split('@')[0];
+    const jid = data.key.remoteJid || '';
+    // Grupos y estados de WhatsApp no son contactos: se descartan.
+    if (jid.includes('@g.us') || jid.includes('broadcast')) return;
+    const phone = jid.split('@')[0];
     const name  = data.pushName || 'Desconocido';
 
     // Detectar chats iniciados desde la landing (mensaje pre-llenado del botón WPP)
@@ -436,17 +439,20 @@ app.post('/webhook', async (req, res) => {
       landingPhones.add(phone);
       if (pool) pool.query('INSERT INTO landing_phones (phone) VALUES ($1) ON CONFLICT DO NOTHING', [phone]).catch(() => {});
       logEntry('MENSAJE', `Chat desde landing — ${name} (${phone})`, { phone, name });
-      registrarContactoSeguro(phone, name, textMsg);
+      registrarContactoSeguro(phone, name, textMsg, 'landing');
       // Señal CAPI: Contact (mensaje recibido = interés real)
       dispararMetaCAPILanding('Contact', 'organico', { ph: phone });
       return;
     }
 
-    // Solo procesar comprobantes de clientes que iniciaron desde la landing
-    if (!landingPhones.has(phone)) return;
+    // Todo el que escribe queda guardado, aunque no venga de la landing.
+    // Así un baneo de WhatsApp no borra ningún contacto.
+    // Se registra incluso si el primer mensaje es un audio o una imagen (sin texto).
+    registrarContactoSeguro(phone, name, textMsg, landingPhones.has(phone) ? 'landing' : 'directo');
 
-    // Cada mensaje actualiza la ficha del contacto (no bloquea el flujo)
-    if (textMsg) registrarContactoSeguro(phone, name, textMsg);
+    // Los comprobantes, en cambio, se analizan SOLO para quienes vinieron de la
+    // landing: las analíticas y las ventas miden el tráfico de ads, no el resto.
+    if (!landingPhones.has(phone)) return;
 
     // Solo procesar imágenes y documentos (comprobantes reales).
     let resultado;
@@ -786,10 +792,10 @@ async function checkWAConnection() {
 // ── CONTACTOS ──────────────────────────────────────────────────────────────
 
 /** Registra sin bloquear el webhook: si falla, se loguea y sigue. */
-function registrarContactoSeguro(telefono, nombre, texto) {
+function registrarContactoSeguro(telefono, nombre, texto, origen = 'directo') {
   if (!pool) return;
   contactos
-    .registrarContacto(pool, { telefono, nombre, texto, apiKey: CONFIG.ANTHROPIC_KEY })
+    .registrarContacto(pool, { telefono, nombre, texto, apiKey: CONFIG.ANTHROPIC_KEY, origen })
     .then(c => { if (c) broadcast({ type: 'contacto', data: c }); })
     .catch(e => console.error('[contactos] registrar:', e.message));
 }
@@ -829,12 +835,13 @@ app.get('/api/contactos/export.xlsx', async (req, res) => {
   try {
     const lista = await contactos.listar(pool);
     const buf = buildXlsx(
-      ['Nº cliente', 'Teléfono', 'Nombre', 'Pagó', 'Estado', 'Notas'],
+      ['Nº cliente', 'Teléfono', 'Nombre', 'Pagó', 'Origen', 'Estado', 'Notas'],
       lista.map(c => [
         c.nro || '',
         String(c.telefono || ''),
         c.nombre || '',
         c.estado === 'pago' ? 'Sí' : 'No',
+        c.origen === 'landing' ? 'Anuncio' : 'Directo',
         c.estado || '',
         c.notas || '',
       ]),

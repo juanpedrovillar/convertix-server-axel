@@ -27,10 +27,14 @@ export async function initSchema(pool) {
       estado      TEXT DEFAULT 'nuevo',
       notas       TEXT DEFAULT '',
       sheet_row   INTEGER,
+      origen      TEXT DEFAULT 'directo',
       primer_msg  TIMESTAMPTZ DEFAULT NOW(),
       ultimo_msg  TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+  // para bases que ya existían sin la columna
+  await pool.query(`ALTER TABLE contactos ADD COLUMN IF NOT EXISTS origen TEXT DEFAULT 'directo';`);
+
   // nro secuencial propio, independiente del id interno
   await pool.query(`
     CREATE SEQUENCE IF NOT EXISTS contactos_nro_seq OWNED BY contactos.nro;
@@ -113,7 +117,7 @@ function agregarNota(previas, nota) {
  * Registra o actualiza un contacto y sincroniza la fila del Sheet.
  * Llamalo desde el webhook por cada mensaje entrante.
  */
-export async function registrarContacto(pool, { telefono, nombre, texto, apiKey }) {
+export async function registrarContacto(pool, { telefono, nombre, texto, apiKey, origen = 'directo' }) {
   if (!telefono) return null;
 
   const { rows: existentes } = await pool.query(
@@ -131,15 +135,17 @@ export async function registrarContacto(pool, { telefono, nombre, texto, apiKey 
   const notas = agregarNota(previo?.notas, nota);
 
   const { rows } = await pool.query(
-    `INSERT INTO contactos (telefono, nombre, estado, notas)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO contactos (telefono, nombre, estado, notas, origen)
+     VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (telefono) DO UPDATE SET
        nombre     = COALESCE(NULLIF(EXCLUDED.nombre, ''), contactos.nombre),
        estado     = EXCLUDED.estado,
        notas      = EXCLUDED.notas,
+       -- si alguna vez vino de la landing, ese origen no se pisa nunca
+       origen     = CASE WHEN contactos.origen = 'landing' THEN 'landing' ELSE EXCLUDED.origen END,
        ultimo_msg = NOW()
      RETURNING *`,
-    [telefono, nombre || '', estado, notas]
+    [telefono, nombre || '', estado, notas, origen]
   );
 
   const c = rows[0];
@@ -163,9 +169,12 @@ export async function marcarPago(pool, telefono, { monto, moneda } = {}) {
   const nota = monto ? `pagó ${moneda || 'ARS'} ${monto}` : 'pago confirmado';
   const { rows } = await pool.query(
     `UPDATE contactos
-     SET estado = 'pago', notas = notas || $2, ultimo_msg = NOW()
+     SET estado = 'pago',
+         -- sin salto de línea inicial cuando la ficha todavía no tenía notas
+         notas = CASE WHEN COALESCE(notas, '') = '' THEN $2 ELSE notas || chr(10) || $2 END,
+         ultimo_msg = NOW()
      WHERE telefono = $1 RETURNING *`,
-    [telefono, `\n${hoy()}: ${nota}`]
+    [telefono, `${hoy()}: ${nota}`]
   );
   const c = rows[0];
   if (c) await sheets.safe('update-pago', () => sheets.updateContacto(c.sheet_row, c));
