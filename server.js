@@ -61,7 +61,7 @@ const CONFIG = {
   CLIENT_NAME:        process.env.CLIENT_NAME        || 'Axel',
   // Datos del cliente que antes estaban escritos a mano en medio del código.
   CLIENT_SITE_URL:    process.env.CLIENT_SITE_URL    || 'https://convertix-server-production.up.railway.app',
-  CLIENT_WPP_NUMBER:  process.env.CLIENT_WPP_NUMBER  || '543518769844',
+  CLIENT_WPP_NUMBER:  process.env.CLIENT_WPP_NUMBER  || '5493543652175',
   CLIENT_WPP_MSG:     process.env.CLIENT_WPP_MSG     || 'Hola Axel, necesito tu ayuda...',
   // Nombre del producto que se le informa a Meta en cada Purchase.
   CLIENT_PRODUCT:     process.env.CLIENT_PRODUCT     || 'Consulta',
@@ -829,8 +829,15 @@ app.get('/api/contactos/export.xlsx', async (req, res) => {
   try {
     const lista = await contactos.listar(pool);
     const buf = buildXlsx(
-      ['Nº cliente', 'Teléfono', 'Nombre', 'Estado', 'Notas'],
-      lista.map(c => [c.nro || '', String(c.telefono || ''), c.nombre || '', c.estado || '', c.notas || '']),
+      ['Nº cliente', 'Teléfono', 'Nombre', 'Pagó', 'Estado', 'Notas'],
+      lista.map(c => [
+        c.nro || '',
+        String(c.telefono || ''),
+        c.nombre || '',
+        c.estado === 'pago' ? 'Sí' : 'No',
+        c.estado || '',
+        c.notas || '',
+      ]),
       'Contactos'
     );
     const fecha = new Date().toISOString().slice(0, 10);
