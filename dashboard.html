@@ -1501,15 +1501,15 @@
     function renderAnalytics() {
       const v = filtered('TRANSFERENCIA'), ch = filtered('MENSAJE'),
         cl = filtered('CLICK'), vi = filtered('VISITA');
-      const hasData = allEvents.some(e => e.tipo === 'TRANSFERENCIA');
-      document.getElementById('analytics-empty').style.display = hasData ? 'none' : 'flex';
-      document.getElementById('analytics-content').style.display = hasData ? 'block' : 'none';
-      if (!hasData) return;
+      // Analytics siempre visible: arranca en 0 y se llena con visitas, clicks y
+      // chats a medida que entran. Antes estaba bloqueado hasta la primera venta.
+      document.getElementById('analytics-empty').style.display = 'none';
+      document.getElementById('analytics-content').style.display = 'block';
 
       const monto = v.reduce((s, e) => s + (e.monto || 0), 0);
       const phones = [...new Set(ch.map(e => e.phone))].length;
       document.getElementById('kpiVentas').textContent = v.length;
-      document.getElementById('kpiMonto').textContent = monto ? '$' + fmt(monto) : '';
+      document.getElementById('kpiMonto').textContent = '$' + fmt(monto || 0);
       document.getElementById('kpiChats').textContent = phones;
       document.getElementById('kpiClicks').textContent = cl.length;
       document.getElementById('kpiVisitas').textContent = vi.length;
