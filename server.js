@@ -335,10 +335,15 @@ app.get('/api/qr', async (req, res) => {
       await new Promise(r => setTimeout(r, 2000));
     }
 
-    const r = await fetch(
-      `${CONFIG.EVOLUTION_URL}/instance/connect/${CONFIG.EVOLUTION_INSTANCE}`,
-      { headers: { 'apikey': CONFIG.EVOLUTION_APIKEY } }
-    );
+    // Con ?number=549XXXXXXXXXX Evolution devuelve un código de 8 dígitos para
+    // vincular sin escanear. Es otro flujo de WhatsApp y a veces pasa cuando el
+    // QR falla. Sin el parámetro, se comporta igual que antes (QR).
+    const numero = (req.query.number || '').replace(/\D/g, '');
+    const url = numero
+      ? `${CONFIG.EVOLUTION_URL}/instance/connect/${CONFIG.EVOLUTION_INSTANCE}?number=${numero}`
+      : `${CONFIG.EVOLUTION_URL}/instance/connect/${CONFIG.EVOLUTION_INSTANCE}`;
+
+    const r = await fetch(url, { headers: { 'apikey': CONFIG.EVOLUTION_APIKEY } });
     const data = await r.json();
     res.json(data);
   } catch (err) {
